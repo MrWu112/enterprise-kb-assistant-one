@@ -5,11 +5,11 @@ import os
 load_dotenv()
 
 class Settings(BaseModel):
-    base_url: str = os.getenv("BASE_URL","https://api.siliconflow.cn/v1")
+    base_url: str = os.getenv("BASE_URL","")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 
     closeai_api_key: str = os.getenv("CLOSEAI_API_KEY", "")
-    closeai_base_url: str = 'https://api.openai-proxy.org/v1'
+    closeai_base_url: str = ''
 
     model_name: str = os.getenv("MODEL_NAME", "gpt-4o-mini")
     embeddings_model_name: str = os.getenv("EMBEDDINGS_MODEL_NAME", "text-embedding-3-large")
