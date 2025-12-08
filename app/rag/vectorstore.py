@@ -1,10 +1,10 @@
-import chromadb
 from langchain_chroma import Chroma
 from app.config import settings
+from chromadb import HttpClient
 
 
 def get_vectorstore(embeddings):
-    client = chromadb.HttpClient(
+    client = HttpClient(
         host=settings.chroma_host,
         port=settings.chroma_port
     )
