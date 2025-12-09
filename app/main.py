@@ -2,6 +2,8 @@ import json
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
+
 from app.router_graph import router_graph
 from app.deps import get_vs, get_embeddings
 from app.ingestion.loader import load_single_file, split_with_visibility, load_docs, split_docs
@@ -13,6 +15,13 @@ from typing import Optional
 import chromadb
 
 app = FastAPI(title="Enterprise KB Assistant")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # 本地开发可以先全开，线上再收紧
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 DATA_DOCS_DIR = Path("./data/docs")
 DATA_DOCS_DIR.mkdir(parents=True, exist_ok=True)
 SESSIONS: dict[str,dict] = {}
