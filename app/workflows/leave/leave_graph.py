@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict
@@ -60,6 +61,25 @@ def _safe_iso(s: Any) -> str | None:
     except Exception:
         print('日期格式转换失败')
         return None
+
+def _extract_leave_id(text: str) -> str | None:
+    if not text:
+        return None
+    m = re.search(r"\bLV-[0-9a-fA-F]{6,12}\b", text)
+    return m.group(0) if m else None
+
+def decide_intent(state: LeaveState) -> str:
+    """apply / query / cancel"""
+    text = (state.get("text") or state.get("question") or "").lower()
+
+    if any(k in text for k in ["取消", "撤销", "作废"]):
+        return "cancel"
+
+    if any(k in text for k in ["查询", "查", "状态", "进度", "结果"]):
+        if any(k in text for k in ["请假", "年假", "病假", "事假", "休假", "调休", "假期", "申请", "单"]):
+            return "query"
+
+    return "apply"
 
 
 def extract_slots_node(state: LeaveState) -> dict:

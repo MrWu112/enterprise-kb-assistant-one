@@ -19,10 +19,4 @@ class Settings(BaseModel):
     collection_name: str = os.getenv("COLLECTION_NAME", "knowledge_base")
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "800"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "120"))
-    redis_url: str = "redis://localhost:6379"
-    redis_session_ttl: int = 60 * 60 * 24 * 7 # 会话默认保留7天
-
-    class Config:
-        env_file = ".env"
-
 settings = Settings()
