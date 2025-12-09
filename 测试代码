@@ -3,6 +3,10 @@
 
  git log --oneline -1
 
+ git log --oneline --graph --all --decorate
+
+ git log --oneline --graph --all --decorate
+
 
  fcitx5 -r
 
