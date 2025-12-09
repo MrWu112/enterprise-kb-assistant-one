@@ -10,7 +10,6 @@ fcitx5-configtool
 
 uvicorn app.main:app --reload --port 8002
 uvicorn app.main:app --reload --port 8002
-uvicorn app.main:app --reload --port 8002
 
 
  uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
@@ -25,5 +24,6 @@ curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   
 curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   -d '{"text":"我要请年假，2025-12-26 09:00 到 2025-12-26 18:00","user_role":"public","requester":"wzd"}'
 curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   -d '{"text":"我要请年假，2025-12-26 09:00 到 2025-12-26 18:00","user_role":"public","requester":"wzd"}'
 
+ curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   -d '{"text":"确认","user_role":"public","requester":"wzd"}'
  curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   -d '{"text":"确认","user_role":"public","requester":"wzd"}'
  curl -X POST http://127.0.0.1:8002/chat   -H "Content-Type: application/json"   -d '{"text":"确认","user_role":"public","requester":"wzd"}'
