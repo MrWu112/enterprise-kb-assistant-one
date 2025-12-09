@@ -1,0 +1,9 @@
+Collecting redis
+  Downloading redis-7.1.0-py3-none-any.whl.metadata (12 kB)
+Downloading redis-7.1.0-py3-none-any.whl (354 kB)
+Installing collected packages: redis
+  Attempting uninstall: redis
+    Found existing installation: redis 7.0.0
+    Uninstalling redis-7.0.0:
+      Successfully uninstalled redis-7.0.0
+Successfully installed redis-7.1.0
