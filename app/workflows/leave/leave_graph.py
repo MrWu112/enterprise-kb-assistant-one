@@ -8,7 +8,6 @@ from typing import Any, Dict
 
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage
-
 from app.Prompts.hr_prompts import SLOT_SYSTEM, SLOT_USER
 from app.Prompts.time_analysis_prompt import TIME_SYSTEM, TIME_USER
 from app.deps import get__llm
@@ -131,6 +130,8 @@ def parse_time_node(state: LeaveState) -> dict:
     start = _safe_iso(data.get("start_time"))
     end = _safe_iso(data.get("end_time"))
 
+    print("[parse_time] now=", now, "raw=", raw)
+
     if start or end:
         req.update({
             "start_time": start or req.get("start_time"),
@@ -157,6 +158,8 @@ def extract_slots_node(state: LeaveState) -> dict:
         "end_time": _safe_iso(data.get("end_time")) or req.get("end_time"),
         "reason": data.get("reason") or req.get("reason"),
     })
+    print("[extract_slots] raw=", raw)
+    print("[extract_slots] parsed_start=", _safe_iso(data.get("start_time")))
     req["requester"] = state.get("requester", "anonymous")
     return {"req": req}
 
