@@ -109,3 +109,42 @@ def update_leave_request(leave_id: str, fields: dict) -> bool:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
             return cur.rowcount > 0
+
+def get_recent_leave_requests(requester: str, limit: int = 5) -> list[dict]:
+    limit = max(1, min(int(limit), 20))  # 1~20
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT leave_id, leave_type, start_time, end_time, duration_days, status, reason, created_at "
+                "FROM leave_requests WHERE requester=%s "
+                "ORDER BY id DESC LIMIT %s",
+                (requester, limit),
+            )
+            return cur.fetchall()
+
+def update_leave_request(leave_id: str, fields: dict) -> bool:
+    """
+    Only update PENDING requests.
+    fields can include: leave_type, start_time, end_time, duration_days, reason
+    """
+    allowed = {"leave_type", "start_time", "end_time", "duration_days", "reason"}
+    sets = []
+    params = []
+    for k, v in fields.items():
+        if k in allowed and v is not None:
+            sets.append(f"{k}=%s")
+            params.append(v)
+
+    if not sets:
+        return False
+
+    params.extend([leave_id])
+    sql = (
+        "UPDATE leave_requests SET " + ", ".join(sets) +
+        " WHERE leave_id=%s AND status='PENDING'"
+    )
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return cur.rowcount > 0

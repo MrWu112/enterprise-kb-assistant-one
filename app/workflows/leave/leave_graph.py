@@ -18,7 +18,22 @@ from app.db.mysql import (
     insert_leave_request,
     get_leave_request,
     cancel_leave_request,
+    get_recent_leave_requests,
+    update_leave_request,
 )
+# ========= 添加工具函数 =========
+def _extract_limit(text: str, default: int = 5) -> int:
+    if not text:
+        return default
+    m = re.search(r"(\d+)\s*条", text)
+    if not m:
+        m = re.search(r"最近\s*(\d+)", text)
+    if m:
+        try:
+            return int(m.group(1))
+        except Exception:
+            return default
+    return default
 
 # ========= Helpers =========
 
@@ -64,12 +79,37 @@ def decide_intent(state: LeaveState) -> str:
         if any(k in text for k in ["请假", "年假", "病假", "事假", "休假", "调休", "假期", "申请", "单"]):
             return "query"
 
+    if any(k in text for k in ["最近", "列表", "我的请假", "请假记录", "历史请假"]) and \
+            any(k in text for k in ["请假", "年假", "病假", "事假", "休假", "假期", "记录"]):
+        return "list"
+
+    if any(k in text for k in ["修改", "变更", "调整", "改期", "改到", "改为"]):
+        return "modify"
+
     return "apply"
 
 def intent_node(state: LeaveState) -> dict:
     return {}
 
 # ========= Query / Cancel Nodes =========
+
+def list_leave_node(state: LeaveState) -> dict:
+    text = state.get("text") or state.get("question") or ""
+    requester = state.get("requester", "anonymous")
+    limit = _extract_limit(text, default=5)
+
+    rows = get_recent_leave_requests(requester, limit=limit)
+    if not rows:
+        return {"answer": "你还没有请假记录。"}
+
+    lines = [f"最近 {len(rows)} 条请假记录："]
+    for r in rows:
+        lines.append(
+            f"- {r['leave_id']} | {r['leave_type']} | "
+            f"{r['start_time']} ~ {r['end_time']} | "
+            f"{r['duration_days']}天 | {r['status']}"
+        )
+    return {"answer": "\n".join(lines)}
 
 def query_leave_node(state: LeaveState) -> dict:
     text = state.get("text") or state.get("question") or ""
@@ -93,6 +133,95 @@ def query_leave_node(state: LeaveState) -> dict:
             f"时长：{row['duration_days']} 天\n"
             f"原因：{row.get('reason') or '无'}"
         ),
+    }
+
+def modify_leave_node(state: LeaveState) -> dict:
+    text = state.get("text") or state.get("question") or ""
+    requester = state.get("requester", "anonymous")
+
+    leave_id = state.get("leave_id") or _extract_leave_id(text)
+    if not leave_id:
+        return {"answer": "请提供要修改的请假编号(例如LV-xxxxxxx)."}
+
+    old = get_leave_request(leave_id)
+    if not old:
+        return {"answer": f"未找到编号为 {leave_id} 的请假申请."}
+    if old["status"] != "PENDING":
+        return {"answer": f"{leave_id}不是待审批状态,无法修改(当前:{old['status']})."}
+
+    # 1) 基于旧单构造 base req
+    base_req = {
+        "leave_type": old["leave_type"],
+        "start_time": old["start_time"].strftime("%Y-%m-%d%H:%M"),
+        "end_time": old["end_time"].strftime("%Y-%m-%d%H:%M"),
+        "reason": old.get("reason"),
+        "requester": old["requester"],
+    }
+
+    llm = get__llm()
+
+    # 2) LLM抽 leave_type / ISO 时间(如果用户给了)
+    raw_slots = llm.invoke([
+        SystemMessage(content=SLOT_SYSTEM),
+        HumanMessage(content=SLOT_USER.format(text=text)),
+    ]).content
+    slots = _safe_json_load(raw_slots)
+
+    # 3) LLM解析相对时间(如果用户只说"下周二/明天下午")
+    raw_time = llm.invoke([
+        SystemMessage(content=TIME_SYSTEM),
+        HumanMessage(content=TIME_USER.format(
+            now=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            text=text
+        )),
+    ]).content
+    tdata = _safe_json_load(raw_time)
+
+    new_req = dict(base_req)
+    # 优先用slots中的ISO; slots没有则用相对时间解析结果
+    new_req["leave_type"] = slots.get("leave_type") or new_req["leave_type"]
+
+    st = _safe_iso(slots.get("start_time")) or _safe_iso(tdata.get("start_time"))
+    et = _safe_iso(slots.get("end_time")) or _safe_iso(tdata.get("end_time"))
+    if st:
+        new_req["start_time"] = st
+    if et:
+        new_req["end_time"] = et
+
+    new_req["reason"] = slots.get("reason") or new_req["reason"]
+
+    # 4) validate (余额 + 规则)
+    bal = get_leave_balance(requester) or {}
+    annual_balance = float(bal.get("annual_days", 0))
+    missing, violations = validate_leave(new_req, balance_days = annual_balance)
+    if missing or violations:
+        tips = []
+        if missing:
+            tips.append("缺少信息:" + "、".join(missing))
+        if violations:
+            tips.append("规则问题:" + ";".join(violations))
+        return {"answer": ";".join(tips) + ".请重新描述修改内容"}
+
+    # 5) 落库 udpate
+    ok = update_leave_request(leave_id,{
+        "leave_type": new_req["leave_type"],
+        "start_time": new_req["start_time"],
+        "end_time": new_req["end_time"],
+        "duration_days": new_req["duration_days"],
+        "reason": new_req["reason"],
+    })
+    if not ok:
+        return {"answer":"修改失败:该单可能已被审批或取消."}
+
+    return {
+        "leave_id": leave_id,
+        "answer": (
+            f"已修改请假单 {leave_id}：\n"
+            f"- 类型：{new_req['leave_type']}\n"
+            f"- 开始：{new_req['start_time']}\n"
+            f"- 结束：{new_req['end_time']}\n"
+            f"- 原因：{new_req.get('reason') or '无'}"
+        )
     }
 
 def cancel_leave_node(state: LeaveState) -> dict:
@@ -231,6 +360,7 @@ def build_leave_graph():
     g.add_node("intent", intent_node)
     g.add_node("query", query_leave_node)
     g.add_node("cancel", cancel_leave_node)
+    g.add_node("list", list_leave_node)
 
     # apply-flow
     g.add_node("parse_time", parse_time_node)
@@ -239,14 +369,23 @@ def build_leave_graph():
     g.add_node("need_info", need_info_node)
     g.add_node("confirm", confirm_node)
     g.add_node("create", create_leave_node)
+    g.add_node("modify", modify_leave_node)
 
     g.add_edge(START, "intent")
 
     g.add_conditional_edges(
         "intent",
         decide_intent,
-        {"apply": "parse_time", "query": "query", "cancel": "cancel"},
+        {
+            "apply": "parse_time",
+            "query": "query",
+            "cancel": "cancel",
+            "list": "list",
+            "modify": "modify",
+        },
     )
+
+    g.add_edge("list", END)
 
     g.add_edge("parse_time", "extract")
     g.add_edge("extract", "validate")
@@ -267,5 +406,6 @@ def build_leave_graph():
     g.add_edge("cancel", END)
     g.add_edge("need_info", END)
     g.add_edge("create", END)
+    g.add_edge("modify", END)
 
     return g.compile()
