@@ -8,6 +8,8 @@ from app.router_graph import router_graph
 from app.deps import get_vs, get_embeddings
 from app.ingestion.loader import load_single_file, split_with_visibility, load_docs, split_docs
 from app.config import settings
+from app.api.auth_api import router as auth_router
+from app.api.rbac_api import router as rbac_router
 import time
 import uuid
 from pathlib import Path
@@ -22,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router, tags=["auth"])
+app.include_router(rbac_router, tags=["rbac"])
 DATA_DOCS_DIR = Path("./data/docs")
 DATA_DOCS_DIR.mkdir(parents=True, exist_ok=True)
 SESSIONS: dict[str,dict] = {}
